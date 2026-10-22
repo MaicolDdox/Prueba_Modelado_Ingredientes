@@ -2,7 +2,11 @@
   {
     "slug": "ramen",
     "nombre": "Ramen coreano",
-    "archivo": "ramen.glb",
-    "camara_orbit": "30deg 65deg 105%"
+    "archivo": "container/ramen.glb"
+  },
+  {
+    "slug": "croissant",
+    "nombre": "Croissant Frances",
+    "archivo": "container/croissant.glb"
   }
 ]
