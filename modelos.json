@@ -1,0 +1,8 @@
+[
+  {
+    "slug": "ramen",
+    "nombre": "Ramen coreano",
+    "archivo": "ramen.glb",
+    "camara_orbit": "30deg 65deg 105%"
+  }
+]

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Prueba 3D con cámara</title>
+  <title>Prueba 3D con cámara y RA</title>
   <script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer/dist/model-viewer.min.js"></script>
   <style>
     html, body { margin: 0; height: 100%; background: #111; overflow: hidden; font-family: system-ui, sans-serif; }
@@ -15,19 +15,32 @@
       position: absolute; inset: 0; width: 100%; height: 100%;
       z-index: 1; background: transparent; --poster-color: transparent;
     }
+    #barra {
+      position: absolute; top: 16px; left: 16px; right: 16px; z-index: 2;
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
+    }
+    #selector {
+      width: min(360px, 100%); padding: 12px 14px; font-size: 16px; font-weight: 600;
+      border: 0; border-radius: 12px; background: rgba(255,255,255,.92); color: #111;
+    }
     .boton {
-      position: absolute; left: 50%; transform: translateX(-50%);
       padding: 14px 26px; font-size: 17px; font-weight: 600;
       border: 0; border-radius: 999px; background: #f5c400; color: #111;
-      z-index: 2;
     }
-    #btn-camara { top: 20px; }
-    #boton-ar { bottom: 28px; }
+    #boton-ar {
+      position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%);
+      z-index: 2; white-space: nowrap;
+    }
     #aviso {
-      position: absolute; left: 16px; right: 16px; top: 80px; z-index: 2;
-      color: #fff; background: rgba(0,0,0,.6); padding: 10px 14px;
+      position: absolute; left: 16px; right: 16px; top: 140px; z-index: 3;
+      color: #fff; background: rgba(0,0,0,.65); padding: 10px 14px;
       border-radius: 12px; display: none; font-size: 15px; text-align: center;
     }
+    #progreso {
+      position: absolute; left: 0; right: 0; top: 0; height: 4px; z-index: 4;
+      background: transparent; transition: opacity .3s;
+    }
+    #progreso-barra { height: 100%; width: 0; background: #f5c400; }
   </style>
 </head>
 <body>
@@ -35,8 +48,7 @@
 
   <model-viewer
     id="visor"
-    src="ramen.glb"
-    alt="Ramen coreano"
+    alt="Modelo 3D"
     ar
     ar-modes="webxr scene-viewer quick-look"
     camera-controls
@@ -48,21 +60,93 @@
     <button slot="ar-button" class="boton" id="boton-ar">Ver en mi mesa (AR)</button>
   </model-viewer>
 
-  <button class="boton" id="btn-camara">Ver con la cámara</button>
+  <div id="progreso"><div id="progreso-barra"></div></div>
+
+  <div id="barra">
+    <select id="selector" aria-label="Elegir modelo 3D"></select>
+    <button class="boton" id="btn-camara">Ver con la cámara</button>
+  </div>
   <div id="aviso"></div>
 
   <script>
+    const ORBIT_POR_DEFECTO = '30deg 65deg 105%';
+
     const video = document.getElementById('camara');
     const visor = document.getElementById('visor');
     const boton = document.getElementById('btn-camara');
+    const selector = document.getElementById('selector');
     const aviso = document.getElementById('aviso');
-    let stream = null;
+    const progreso = document.getElementById('progreso');
+    const progresoBarra = document.getElementById('progreso-barra');
 
-    function mostrarAviso(texto) {
+    let stream = null;
+    let modelos = [];
+    let temporizadorAviso = null;
+
+    function mostrarAviso(texto, ms = 4000) {
       aviso.textContent = texto;
       aviso.style.display = 'block';
-      setTimeout(() => { aviso.style.display = 'none'; }, 4000);
+      clearTimeout(temporizadorAviso);
+      temporizadorAviso = setTimeout(() => { aviso.style.display = 'none'; }, ms);
     }
+
+    /* ---------- Modelos ---------- */
+
+    function mostrarModelo(m) {
+      // setAttribute (no propiedades) para que funcione aunque model-viewer aún no esté cargado
+      visor.setAttribute('alt', m.nombre);
+      visor.setAttribute('camera-orbit', m.camara_orbit || ORBIT_POR_DEFECTO);
+      visor.setAttribute('src', m.archivo);
+      const url = new URL(location.href);
+      url.searchParams.set('modelo', m.slug);
+      history.replaceState(null, '', url);
+    }
+
+    async function cargarModelos() {
+      try {
+        const r = await fetch('modelos.json', { cache: 'no-store' });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        modelos = await r.json();
+      } catch (e) {
+        mostrarAviso('No se pudo leer modelos.json. Abre la página desde un servidor, no con doble clic.', 8000);
+        return;
+      }
+      if (!Array.isArray(modelos) || modelos.length === 0) {
+        mostrarAviso('modelos.json está vacío.', 8000);
+        return;
+      }
+      selector.innerHTML = '';
+      for (const m of modelos) {
+        const op = document.createElement('option');
+        op.value = m.slug;
+        op.textContent = m.nombre;
+        selector.appendChild(op);
+      }
+      // ?modelo=slug abre directo ese modelo (útil para el futuro QR por platillo)
+      const pedido = new URLSearchParams(location.search).get('modelo');
+      const inicial = modelos.find(m => m.slug === pedido) || modelos[0];
+      selector.value = inicial.slug;
+      mostrarModelo(inicial);
+    }
+
+    selector.addEventListener('change', () => {
+      const m = modelos.find(x => x.slug === selector.value);
+      if (m) mostrarModelo(m);
+    });
+
+    visor.addEventListener('progress', (e) => {
+      const p = e.detail.totalProgress;
+      progreso.style.opacity = '1';
+      progresoBarra.style.width = (p * 100) + '%';
+      if (p >= 1) progreso.style.opacity = '0';
+    });
+    visor.addEventListener('load', () => { progreso.style.opacity = '0'; });
+    visor.addEventListener('error', () => {
+      progreso.style.opacity = '0';
+      mostrarAviso('No se pudo cargar este modelo. Revisa que el archivo exista en la carpeta.', 6000);
+    });
+
+    /* ---------- Modo cámara ---------- */
 
     function apagarCamara() {
       if (stream) stream.getTracks().forEach(t => t.stop());
@@ -75,6 +159,10 @@
 
     boton.addEventListener('click', async () => {
       if (stream) { apagarCamara(); return; }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        mostrarAviso('La cámara solo funciona con HTTPS. Abre la página desde la dirección segura.', 6000);
+        return;
+      }
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: 'environment' } },
@@ -89,6 +177,8 @@
         mostrarAviso('No se pudo abrir la cámara. Revisa el permiso del navegador.');
       }
     });
+
+    cargarModelos();
   </script>
 </body>
 </html>
