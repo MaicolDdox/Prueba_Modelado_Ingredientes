@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prueba 3D con cámara</title>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer/dist/model-viewer.min.js"></script>
+  <style>
+    html, body { margin: 0; height: 100%; background: #111; overflow: hidden; font-family: system-ui, sans-serif; }
+    #camara {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      object-fit: cover; display: none; z-index: 0;
+    }
+    model-viewer {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      z-index: 1; background: transparent; --poster-color: transparent;
+    }
+    .boton {
+      position: absolute; left: 50%; transform: translateX(-50%);
+      padding: 14px 26px; font-size: 17px; font-weight: 600;
+      border: 0; border-radius: 999px; background: #f5c400; color: #111;
+      z-index: 2;
+    }
+    #btn-camara { top: 20px; }
+    #boton-ar { bottom: 28px; }
+    #aviso {
+      position: absolute; left: 16px; right: 16px; top: 80px; z-index: 2;
+      color: #fff; background: rgba(0,0,0,.6); padding: 10px 14px;
+      border-radius: 12px; display: none; font-size: 15px; text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <video id="camara" autoplay playsinline muted></video>
+
+  <model-viewer
+    id="visor"
+    src="ramen.glb"
+    alt="Ramen coreano"
+    ar
+    ar-modes="webxr scene-viewer quick-look"
+    camera-controls
+    auto-rotate
+    camera-orbit="30deg 65deg 105%"
+    shadow-intensity="0"
+    interaction-prompt="none"
+    loading="eager">
+    <button slot="ar-button" class="boton" id="boton-ar">Ver en mi mesa (AR)</button>
+  </model-viewer>
+
+  <button class="boton" id="btn-camara">Ver con la cámara</button>
+  <div id="aviso"></div>
+
+  <script>
+    const video = document.getElementById('camara');
+    const visor = document.getElementById('visor');
+    const boton = document.getElementById('btn-camara');
+    const aviso = document.getElementById('aviso');
+    let stream = null;
+
+    function mostrarAviso(texto) {
+      aviso.textContent = texto;
+      aviso.style.display = 'block';
+      setTimeout(() => { aviso.style.display = 'none'; }, 4000);
+    }
+
+    function apagarCamara() {
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      stream = null;
+      video.srcObject = null;
+      video.style.display = 'none';
+      visor.setAttribute('auto-rotate', '');
+      boton.textContent = 'Ver con la cámara';
+    }
+
+    boton.addEventListener('click', async () => {
+      if (stream) { apagarCamara(); return; }
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } },
+          audio: false
+        });
+        video.srcObject = stream;
+        video.style.display = 'block';
+        visor.removeAttribute('auto-rotate');
+        boton.textContent = 'Cerrar cámara';
+        mostrarAviso('Arrastra para girar y pellizca para acercar o alejar el platillo');
+      } catch (e) {
+        mostrarAviso('No se pudo abrir la cámara. Revisa el permiso del navegador.');
+      }
+    });
+  </script>
+</body>
+</html>
